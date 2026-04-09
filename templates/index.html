@@ -1,0 +1,274 @@
+<!DOCTYPE html><html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Crop Predictor</title><style>
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background: url('https://images.unsplash.com/photo-1500937386664-56d1dfef3854') no-repeat center center/cover;
+}
+.container {
+    width: 420px;
+    margin: 30px auto;
+    background: white;
+    padding: 20px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+h2 { text-align:center; color:#185a9d; }
+input, select, button {
+    width:100%; padding:10px; margin-top:8px;
+    border-radius:10px; border:1px solid #ccc;
+}
+button {
+    background:#ff7b00; color:white; border:none; font-weight:bold;
+}
+button:hover { background:#e66900; }
+#result { margin-top:15px; font-weight:bold; white-space:pre-line; }
+.weatherBox {
+    background:#eef7ff;
+    padding:10px;
+    border-radius:10px;
+    margin-top:10px;
+}
+</style></head><body>
+<div class="container">
+<h2 id="title">🌾 Smart Crop Predictor</h2><select id="language" onchange="changeLanguage()">
+<option value="en">English</option>
+<option value="kn">ಕನ್ನಡ</option>
+</select><form id="form">
+<label id="cropLabel">Crop</label>
+<select id="crop"></select>
+
+<label>Year</label>
+<select id="year"></select>
+
+<label>Season</label>
+<select id="season"></select>
+<input id="state" placeholder="State">
+<input id="area" placeholder="Area">
+<input id="production" placeholder="Production">
+<input id="rainfall" placeholder="Rainfall (mm)">
+<input id="fertilizer" placeholder="Fertilizer (kg)">
+<input id="pesticide" placeholder="Pesticide (kg)"><button type="submit" id="btn">Predict</button> <button type="button" onclick="getLocation()">Use Current Location</button>
+
+</form><div class="weatherBox" id="weather">📍 Location not detected</div>
+<h3 id="result"></h3>
+<canvas id="myChart"></canvas>
+</div><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><script>
+let apiKey = "151c32c3a1d814abcf43740eb301d7fc";
+
+fetch("/get-options")
+.then(res => res.json())
+.then(data => {
+
+    // CROPS
+    let cropSelect = document.getElementById("crop");
+    cropSelect.innerHTML = "";
+    data.crops.forEach(c=>{
+        let opt = document.createElement("option");
+        opt.value = c;
+        opt.text = c;
+        cropSelect.appendChild(opt);
+    });
+
+    // SEASONS
+    let seasonSelect = document.getElementById("season");
+    seasonSelect.innerHTML = "";
+    data.seasons.forEach(s=>{
+        let opt = document.createElement("option");
+        opt.value = s;
+        opt.text = s;
+        seasonSelect.appendChild(opt);
+    });
+
+    // STATES (autocomplete)
+    let stateInput = document.getElementById("state");
+    let datalist = document.createElement("datalist");
+    datalist.id = "stateList";
+
+    data.states.forEach(s=>{
+        let opt = document.createElement("option");
+        opt.value = s;
+        datalist.appendChild(opt);
+    });
+
+    document.body.appendChild(datalist);
+    stateInput.setAttribute("list","stateList");
+
+});
+
+let yearSelect = document.getElementById("year");
+yearSelect.innerHTML = "";
+
+for(let y=2026; y<=2050; y++){
+    let opt = document.createElement("option");
+    opt.value = y;
+    opt.text = y;
+    yearSelect.appendChild(opt);
+}
+function changeLanguage() {
+    let lang = document.getElementById("language").value;
+
+    if (lang === "kn") {
+        document.getElementById("title").innerText = "ಬೆಳೆ ಉತ್ಪಾದನಾ ಮುನ್ಸೂಚನೆ";
+        document.getElementById("btn").innerText = "ಅಂದಾಜು";
+        document.getElementById("cropLabel").innerText = "ಬೆಳೆ";
+        document.getElementById("year").placeholder = "ವರ್ಷ";
+        document.getElementById("season").placeholder = "ಋತು";
+        document.getElementById("state").placeholder = "ರಾಜ್ಯ";
+        document.getElementById("area").placeholder = "ಪ್ರದೇಶ";
+        document.getElementById("production").placeholder = "ಉತ್ಪಾದನೆ";
+        document.getElementById("rainfall").placeholder = "ಮಳೆ (ಮಿಮೀ)";
+        document.getElementById("fertilizer").placeholder = "ರಸಗೊಬ್ಬರ";
+        document.getElementById("pesticide").placeholder = "ಕೀಟನಾಶಕ";
+    } else {
+        location.reload();
+    }
+}
+
+function getLocation() {
+    navigator.geolocation.getCurrentPosition(async (pos)=>{
+        let lat = pos.coords.latitude;
+        let lon = pos.coords.longitude;
+
+        document.getElementById("weather").innerText = "Fetching weather...";
+
+        let res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`);
+        let data = await res.json();
+
+        let city = data.name;
+        let temp = data.main.temp;
+        let humidity = data.main.humidity;
+
+        document.getElementById("weather").innerHTML =
+            `📍 ${city}<br>🌡 Temp: ${temp}°C<br>💧 Humidity: ${humidity}%`;
+
+        let rainfall = data.rain && data.rain["1h"] ? data.rain["1h"] : 50;
+        document.getElementById("rainfall").value = rainfall;
+
+        let loc = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+        let locData = await loc.json();
+        document.getElementById("state").value = locData.address.state || "";
+
+        document.getElementById("form").requestSubmit();
+    });
+}
+
+let cropData = {
+ rice:{minRain:1000,idealYield:60,pesticide:"Neem oil"},
+ wheat:{minRain:500,idealYield:45,pesticide:"Imidacloprid"},
+ cotton:{minRain:600,idealYield:30,pesticide:"Bt spray"},
+ maize:{minRain:600,idealYield:50,pesticide:"Carbaryl"},
+ sugarcane:{minRain:1200,idealYield:80,pesticide:"Chlorpyrifos"},
+ ragi:{minRain:700,idealYield:35,pesticide:"Neem oil"},
+ barley:{minRain:400,idealYield:40,pesticide:"Mancozeb"},
+ millet:{minRain:350,idealYield:30,pesticide:"Organic spray"},
+ groundnut:{minRain:500,idealYield:25,pesticide:"Thiram"},
+ soybean:{minRain:600,idealYield:35,pesticide:"Glyphosate"}
+};
+
+document.getElementById("form").addEventListener("submit", async function(e){
+ e.preventDefault();
+
+ let rainfall = Number(document.getElementById("rainfall").value);
+ let crop = document.getElementById("crop").value;
+ let lang = document.getElementById("language").value;
+
+
+let res = await fetch("/predict",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body: JSON.stringify({
+    Crop: document.getElementById("crop").value,
+    Crop_Year: Number(document.getElementById("year").value),
+    Season: document.getElementById("season").value,
+    State: document.getElementById("state").value,
+    Area: Number(document.getElementById("area").value),
+    Production: Number(document.getElementById("production").value),
+    Annual_Rainfall: Number(document.getElementById("rainfall").value),
+    Fertilizer: Number(document.getElementById("fertilizer").value),
+    Pesticide: Number(document.getElementById("pesticide").value)
+})
+});
+
+let resultData = await res.json();
+console.log(resultData);   // ✅ debug
+
+if(resultData.error){
+    alert("Error: " + resultData.error);
+    return;
+}
+
+let value = resultData.prediction;
+
+if(value === undefined){
+    alert("Prediction not received from server");
+    return;
+}
+
+let suitability = resultData.suitability;
+let water = resultData.water;
+let pesticide = resultData.pesticide;
+ if (lang === "kn") {
+     document.getElementById("result").innerHTML =
+`🌾 <b>ಬೆಳೆ:</b> ${crop.toUpperCase()}<br>
+📊 <b>ಅಂದಾಜು ಉತ್ಪಾದನೆ:</b> ${value.toFixed(2)} ಟನ್/ಹೆಕ್ಟೇರ್<br>
+🌧 <b>ಮಳೆಯ ಸ್ಥಿತಿ:</b> ${suitability}<br>
+💧 <b>ನೀರಿನ ಸಲಹೆ:</b> ${water}<br>
+🧪 <b>ಕೀಟನಾಶಕ:</b> ${pesticide}<br><br>
+
+✅ <b>ಸಲಹೆ:</b> ${
+    suitability === "Suitable"
+    ? "ಈ ಬೆಳೆಗಾಗಿ ಪರಿಸ್ಥಿತಿ ಉತ್ತಮವಾಗಿದೆ."
+    : "ಪರಿಸ್ಥಿತಿ ಸೂಕ್ತವಲ್ಲ. ನೀರಾವರಿ ಅಥವಾ ಬೇರೆ ಬೆಳೆ ಆಯ್ಕೆ ಮಾಡಿ."
+}`;
+ } else {
+     document.getElementById("result").innerHTML =
+`🌾 <b>Crop:</b> ${crop.toUpperCase()}<br>
+📊 <b>Estimated Yield:</b> ${value.toFixed(2)} ton per hectare<br>
+🌧 <b>Rainfall Status:</b> ${suitability}<br>
+💧 <b>Water Advice:</b> ${water}<br>
+🧪 <b>Recommended Pesticide:</b> ${pesticide}<br><br>
+
+✅ <b>Suggestion:</b> ${
+    suitability === "Suitable"
+    ? "Good conditions! You can proceed with this crop."
+    : "Conditions are not ideal. Consider irrigation or choose a different crop."
+}`;
+ }
+
+ let fert = Number(document.getElementById("fertilizer").value);
+let pest = Number(document.getElementById("pesticide").value);
+
+// Normalize values (IMPORTANT for variation)
+let normYield = value;
+let normRain = rainfall / 10;
+let normFert = fert;
+let normPest = pest * 10;
+
+let ctx = document.getElementById("myChart").getContext("2d");
+if(window.chart) window.chart.destroy();
+
+window.chart = new Chart(ctx,{
+ type:'bar',
+ data:{
+  labels:['Yield','Rainfall','Fertilizer','Pesticide'],
+  datasets:[
+    {
+      label:'Your Input',
+      data:[normYield, normRain, normFert, normPest]
+    },
+    {
+      label:'Ideal Values',
+      data:[70, 100, 200, 50]
+    }
+]
+ }
+
+});
+});
+</script>
+</body>
+</html>
+
